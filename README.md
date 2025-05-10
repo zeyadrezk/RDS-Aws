@@ -1,61 +1,144 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# AWS RDS Provisioning Boilerplate for Laravel (MySQL & PostgreSQL)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+AWS RDS Laravel provisioning example, automation boilerplate, MySQL PostgreSQL template
 
-## About Laravel
+This boilerplate project demonstrates how to automate provisioning, management, and monitoring of AWS RDS instances using Laravel. Perfect for developers seeking an extensible template for AWS RDS (MySQL & PostgreSQL) integration, automation, and best practices.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Table of Contents
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+* [Features](#features)
+* [Prerequisites](#prerequisites)
+* [Project Initialization](#project-initialization)
+* [Installation](#installation)
+* [Configuration](#configuration)
+* [Usage](#usage)
+* [Extending for PostgreSQL](#extending-for-postgresql)
+* [License](#license)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Features
 
-## Learning Laravel
+* **Provisioning**: Create AWS RDS instances with customizable database names, users, and passwords.
+* **Multi-Engine Support**: Works out of the box with MySQL and PostgreSQL engines.
+* **Status Tracking**: Automatically fetch and update instance status and endpoint information.
+* **Soft Deletion**: Mark RDS instances for deletion in the application, with optional manual cleanup in the AWS Console.
+* **Logging & Error Handling**: Comprehensive try-catch blocks and Laravel logging for easy debugging.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Prerequisites
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+* PHP >= 8.0
+* Laravel >= 12.x
+* AWS SDK for PHP (installed via Composer)
+* AWS credentials configured via `.env` or IAM role
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Project Initialization
 
-## Laravel Sponsors
+If you’re starting from scratch with a new Laravel 12 project, you can scaffold the application using Composer:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+```bash
+composer create-project laravel/laravel aws-rds-laravel-example "^12.0"
+cd aws-rds-laravel-example
+```
 
-### Premium Partners
+Generate an application key:
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development/)**
-- **[Active Logic](https://activelogic.com)**
+```bash
+php artisan key:generate
+```
 
-## Contributing
+Install Passport or Sanctum (optional) for API authentication:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+php artisan passport:install
+# or
+php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
+```
 
-## Code of Conduct
+### Installation
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+1. **Clone the repository**
 
-## Security Vulnerabilities
+   ```bash
+   git clone https://github.com/your-repo/aws-rds-laravel-example.git
+   cd aws-rds-laravel-example
+   ```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+2. **Install dependencies**
 
-## License
+   ```bash
+   composer install
+   ```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+3. **Set up environment**
+   Copy the example env file and fill in your AWS credentials and default database settings.
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   ```dotenv
+   AWS_ACCESS_KEY_ID=your-access-key
+   AWS_SECRET_ACCESS_KEY=your-secret-key
+   AWS_DEFAULT_REGION=us-east-1
+
+   DB_CONNECTION=mysql        # or pgsql
+   DB_HOST=127.0.0.1
+   DB_PORT=3306               # 5432 for PostgreSQL
+   DB_DATABASE=laravel
+   DB_USERNAME=root
+   DB_PASSWORD=
+   ```
+
+4. **Run migrations**
+
+   ```bash
+   php artisan migrate
+   ```
+
+
+
+### Usage
+
+#### Create an RDS Instance
+
+Make a POST request to the `/api/rds-instances` endpoint with the following payload:
+
+```json
+{
+    "client_id": "client-xyz",
+    "db_name": "my_database",
+    "username": "db_user",
+    "password": "securePassword123"
+}
+```
+
+#### List All Instances
+
+```bash
+GET /api/rds-instances
+```
+
+#### View a Single Instance
+
+```bash
+GET /api/rds-instances/{id}
+```
+
+#### Mark for Deletion
+
+```bash
+DELETE /api/rds-instances/{id}
+```
+
+### Extending for PostgreSQL
+
+To switch from MySQL to PostgreSQL, update the `AWS_RDS_ENGINE` in your `.env` and ensure the `DB_CONNECTION` is set to `pgsql`. The service class handles both engines transparently.
+
+```dotenv
+AWS_RDS_ENGINE=postgres
+DB_CONNECTION=pgsql
+DB_PORT=5432
+```
+
+### License
+
+MIT License. See [LICENSE](LICENSE) for details.
