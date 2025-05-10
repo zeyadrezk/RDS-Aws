@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\RdsInstance;
@@ -15,6 +16,29 @@ class RdsProvisioningController extends Controller
         $this->awsRdsService = $awsRdsService;
     }
 
+    /**
+     * Display a listing of all RDS instances.
+     */
+    public function index()
+    {
+        $rdsInstances = RdsInstance::all();
+
+        // Update status for all instances
+        foreach ($rdsInstances as $instance) {
+            try {
+                $this->updateInstanceStatus($instance);
+            } catch (\Exception $e) {
+                // Log error but continue with other instances
+                \Log::error("Failed to update instance {$instance->instance_identifier}: {$e->getMessage()}");
+            }
+        }
+
+        return response()->json($rdsInstances);
+    }
+
+    /**
+     * Store a newly created RDS instance.
+     */
     public function store(Request $request)
     {
         $request->validate([
@@ -22,18 +46,34 @@ class RdsProvisioningController extends Controller
             'db_name' => 'required|string',
             'username' => 'required|string',
             'password' => 'required|string|min:8',
+            'subnet_group_name' => 'nullable|string',
         ]);
 
-        $instanceIdentifier = 'rds-' . Str::random(8);
+        $instanceIdentifier = 'rds-' . strtolower(Str::random(8));
+        $subnetGroupName = $request->subnet_group_name ?? 'saas-admin-db-subnet-group';
 
         try {
+            // Create subnet group if it doesn't exist
+            try {
+                $this->awsRdsService->describeDBSubnetGroup($subnetGroupName);
+            } catch (\Exception $e) {
+                // Subnet group doesn't exist, create it
+                $this->awsRdsService->createDBSubnetGroup(
+                    $subnetGroupName,
+                    'Subnet group for SAAS Admin RDS instances'
+                );
+            }
+
+            // Create the RDS instance
             $this->awsRdsService->createRdsInstance(
                 $instanceIdentifier,
                 $request->db_name,
                 $request->username,
-                $request->password
+                $request->password,
+                $subnetGroupName
             );
 
+            // Store record in database
             $rdsInstance = RdsInstance::create([
                 'client_id' => $request->client_id,
                 'instance_identifier' => $instanceIdentifier,
@@ -42,46 +82,68 @@ class RdsProvisioningController extends Controller
 
             return response()->json($rdsInstance, 201);
         } catch (\Exception $e) {
+            \Log::error('Failed to create RDS instance: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to create RDS instance: ' . $e->getMessage()], 500);
         }
     }
 
+    /**
+     * Display the specified RDS instance.
+     */
     public function show($id)
     {
         $rdsInstance = RdsInstance::findOrFail($id);
 
         try {
-            $result = $this->awsRdsService->describeRdsInstance($rdsInstance->instance_identifier);
-            $dbInstance = $result['DBInstances'][0];
-
-            $rdsInstance->status = $dbInstance['DBInstanceStatus'];
-            if ($dbInstance['DBInstanceStatus'] == 'available') {
-                $rdsInstance->endpoint = $dbInstance['Endpoint']['Address'];
-            }
-            $rdsInstance->save();
-
+            $this->updateInstanceStatus($rdsInstance);
             return response()->json($rdsInstance);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to retrieve RDS instance details: ' . $e->getMessage()], 500);
+            \Log::error('Failed to retrieve RDS instance details: ' . $e->getMessage());
+            return response()->json([
+                'instance' => $rdsInstance,
+                'error' => 'Failed to retrieve latest RDS instance details: ' . $e->getMessage()
+            ], 200);
         }
     }
-    public function index()
+
+    /**
+     * Update instance status and endpoint information.
+     */
+    private function updateInstanceStatus(RdsInstance $rdsInstance)
     {
-        $rdsInstance = RdsInstance::get();
+        $result = $this->awsRdsService->describeRdsInstance($rdsInstance->instance_identifier);
+
+        if (!empty($result['DBInstances'])) {
+            $dbInstance = $result['DBInstances'][0];
+            $rdsInstance->status = $dbInstance['DBInstanceStatus'];
+
+            if ($dbInstance['DBInstanceStatus'] == 'available' && isset($dbInstance['Endpoint']['Address'])) {
+                $rdsInstance->endpoint = $dbInstance['Endpoint']['Address'];
+                $rdsInstance->port = $dbInstance['Endpoint']['Port'] ?? 3306;
+            }
+
+            $rdsInstance->save();
+        }
+
+        return $rdsInstance;
+    }
+
+    /**
+     * Delete an RDS instance.
+     */
+    public function destroy($id)
+    {
+        $rdsInstance = RdsInstance::findOrFail($id);
 
         try {
-            $result = $this->awsRdsService->describeRdsInstance($rdsInstance->instance_identifier);
-            $dbInstance = $result['DBInstances'][0];
-
-            $rdsInstance->status = $dbInstance['DBInstanceStatus'];
-            if ($dbInstance['DBInstanceStatus'] == 'available') {
-                $rdsInstance->endpoint = $dbInstance['Endpoint']['Address'];
-            }
+            $this->awsRdsService->deleteRdsInstance($rdsInstance->instance_identifier);
+            $rdsInstance->status = 'deleting';
             $rdsInstance->save();
 
-            return response()->json($rdsInstance);
+            return response()->json(['message' => 'RDS instance deletion initiated']);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to retrieve RDS instance details: ' . $e->getMessage()], 500);
+            \Log::error('Failed to delete RDS instance: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to delete RDS instance: ' . $e->getMessage()], 500);
         }
     }
 }
