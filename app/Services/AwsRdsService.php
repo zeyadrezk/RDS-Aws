@@ -68,26 +68,23 @@ class AwsRdsService
      * @param string $username
      * @param string $password
      * @return \Aws\Result
+     * @throws \InvalidArgumentException
      */
     public function createRdsInstance($instanceIdentifier, $dbName, $username, $password)
     {
-        //for mysql
-//        return $this->rdsClient->createDBInstance([
-//            'DBInstanceIdentifier' => $instanceIdentifier,
-//            'AllocatedStorage' => 20,
-//            'DBInstanceClass' => 'db.t3.micro',
-//            'Engine' => 'mysql',
-//            'MasterUsername' => $username,
-//            'MasterUserPassword' => $password,
-//            'DBName' => $dbName,
-//            'BackupRetentionPeriod' => 7,
-//            'PubliclyAccessible' => false,
-//            'DBSubnetGroupName' => 'saas-admin-db-subnet-group',
-//            'VpcSecurityGroupIds' => ['sg-09d9a96f0b49fdb8f'],
-//            'StorageEncrypted' => true,
-//            'MultiAZ' => false
-//        ]);
+        // Check for reserved usernames
+        $reservedPostgresUsernames = [
+            'admin', 'postgres', 'root', 'user', 'administrator', 'master',
+            'public', 'rdsadmin', 'aws', 'rds_superuser'
+        ];
 
+        if (in_array(strtolower($username), $reservedPostgresUsernames)) {
+            throw new \InvalidArgumentException(
+                "Username '{$username}' is a reserved word in PostgreSQL. Please use a different username."
+            );
+        }
+
+        // First, retrieve available PostgreSQL versions
         try {
             $engineVersions = $this->rdsClient->describeDBEngineVersions([
                 'Engine' => 'postgres',
@@ -112,28 +109,32 @@ class AwsRdsService
             $latestVersion = '15.3'; // Fallback to a commonly supported version
         }
 
-        return $this->rdsClient->createDBInstance([
-            'DBInstanceIdentifier' => $instanceIdentifier,
-            'AllocatedStorage' => 20,
-            'DBInstanceClass' => 'db.t3.micro',
-            'Engine' => 'postgres',
-            'EngineVersion' => $latestVersion, // Use the detected version
-            'MasterUsername' => $username,
-            'MasterUserPassword' => $password,
-            'DBName' => $dbName,
-            'BackupRetentionPeriod' => 7,
-            'PubliclyAccessible' => false,
-            'DBSubnetGroupName' => 'saas-admin-db-subnet-group',
-            'VpcSecurityGroupIds' => ['sg-09d9a96f0b49fdb8f'],
-            'StorageEncrypted' => true,
-            'MultiAZ' => false,
-            'LicenseModel' => 'postgresql-license',
-            'Port' => 5432, // Default PostgreSQL port
-            'StorageType' => 'gp2', // General Purpose SSD
-            'EnablePerformanceInsights' => true, // Enable Performance Insights for monitoring
-            'PerformanceInsightsRetentionPeriod' => 7 // Retention period in days
-        ]);
-
+        try {
+            return $this->rdsClient->createDBInstance([
+                'DBInstanceIdentifier' => $instanceIdentifier,
+                'AllocatedStorage' => 20,
+                'DBInstanceClass' => 'db.t3.micro',
+                'Engine' => 'postgres',
+                'EngineVersion' => $latestVersion, // Use the detected version
+                'MasterUsername' => $username,
+                'MasterUserPassword' => $password,
+                'DBName' => $dbName,
+                'BackupRetentionPeriod' => 7,
+                'PubliclyAccessible' => false,
+                'DBSubnetGroupName' => 'saas-admin-db-subnet-group',
+                'VpcSecurityGroupIds' => ['sg-09d9a96f0b49fdb8f'],
+                'StorageEncrypted' => true,
+                'MultiAZ' => false,
+                'LicenseModel' => 'postgresql-license',
+                'Port' => 5432, // Default PostgreSQL port
+                'StorageType' => 'gp2', // General Purpose SSD
+                'EnablePerformanceInsights' => true, // Enable Performance Insights for monitoring
+                'PerformanceInsightsRetentionPeriod' => 7 // Retention period in days
+            ]);
+        } catch (AwsException $e) {
+            Log::error("Failed to create RDS instance: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -148,7 +149,6 @@ class AwsRdsService
             'DBInstanceIdentifier' => $instanceIdentifier
         ]);
     }
-
 
     /**
      * List available PostgreSQL versions supported by AWS RDS.
@@ -174,4 +174,30 @@ class AwsRdsService
         }
     }
 
+    /**
+     * Validate if a username is valid for PostgreSQL RDS instance
+     *
+     * @param string $username
+     * @return bool
+     */
+    public function isValidPostgresUsername($username)
+    {
+        // Reserved PostgreSQL usernames
+        $reservedPostgresUsernames = [
+            'admin', 'postgres', 'root', 'user', 'administrator', 'master',
+            'public', 'rdsadmin', 'aws', 'rds_superuser'
+        ];
+
+        // Check if the username is reserved
+        if (in_array(strtolower($username), $reservedPostgresUsernames)) {
+            return false;
+        }
+
+        // Check other RDS username requirements
+        // - Must begin with a letter
+        // - Must contain only alphanumeric characters or underscores
+        // - Must be 1-16 characters long
+        // - Cannot be a reserved word
+        return (bool) preg_match('/^[a-zA-Z][a-zA-Z0-9_]{0,15}$/', $username);
+    }
 }
