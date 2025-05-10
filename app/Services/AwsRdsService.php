@@ -75,16 +75,16 @@ class AwsRdsService
             'DBInstanceIdentifier' => $instanceIdentifier,
             'AllocatedStorage' => 20,
             'DBInstanceClass' => 'db.t3.micro',
-            'Engine' => 'mysql',
+            'Engine' => 'postgres', //mysql
             'MasterUsername' => $username,
             'MasterUserPassword' => $password,
             'DBName' => $dbName,
             'BackupRetentionPeriod' => 7,
             'PubliclyAccessible' => false,
-            'DBSubnetGroupName' => 'saas-admin-db-subnet-group', // Use the created subnet group
-            'VpcSecurityGroupIds' => ['sg-09d9a96f0b49fdb8f'], // Default VPC security group
+            'DBSubnetGroupName' => 'saas-admin-db-subnet-group',
+            'VpcSecurityGroupIds' => ['sg-09d9a96f0b49fdb8f'],
             'StorageEncrypted' => true,
-            'MultiAZ' => false // Set to true for production
+            'MultiAZ' => false
         ]);
     }
 
