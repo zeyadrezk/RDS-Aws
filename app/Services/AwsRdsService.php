@@ -93,7 +93,7 @@ class AwsRdsService
             'AllocatedStorage' => 20,
             'DBInstanceClass' => 'db.t3.micro',
             'Engine' => 'postgres',
-            'EngineVersion' => '15.5', // Specify a supported PostgreSQL version
+            'EngineVersion' => '15.4', // Specify a supported PostgreSQL version
             'MasterUsername' => $username,
             'MasterUserPassword' => $password,
             'DBName' => $dbName,
