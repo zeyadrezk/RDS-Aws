@@ -46,31 +46,23 @@ class RdsProvisioningController extends Controller
             'db_name' => 'required|string',
             'username' => 'required|string',
             'password' => 'required|string|min:8',
-            'subnet_group_name' => 'nullable|string',
         ]);
 
         $instanceIdentifier = 'rds-' . strtolower(Str::random(8));
-        $subnetGroupName = $request->subnet_group_name ?? 'saas-admin-db-subnet-group';
 
         try {
-            // Create subnet group if it doesn't exist
-            try {
-                $this->awsRdsService->describeDBSubnetGroup($subnetGroupName);
-            } catch (\Exception $e) {
-                // Subnet group doesn't exist, create it
-                $this->awsRdsService->createDBSubnetGroup(
-                    $subnetGroupName,
-                    'Subnet group for SAAS Admin RDS instances'
-                );
-            }
+            // Create subnet group first
+            $this->awsRdsService->createDBSubnetGroup(
+                'saas-admin-db-subnet-group',
+                'Subnet group for SAAS Admin RDS instances'
+            );
 
             // Create the RDS instance
             $this->awsRdsService->createRdsInstance(
                 $instanceIdentifier,
                 $request->db_name,
                 $request->username,
-                $request->password,
-                $subnetGroupName
+                $request->password
             );
 
             // Store record in database
@@ -129,21 +121,24 @@ class RdsProvisioningController extends Controller
     }
 
     /**
-     * Delete an RDS instance.
+     * Mark an RDS instance for deletion.
      */
     public function destroy($id)
     {
         $rdsInstance = RdsInstance::findOrFail($id);
 
         try {
-            $this->awsRdsService->deleteRdsInstance($rdsInstance->instance_identifier);
-            $rdsInstance->status = 'deleting';
+            // Update status in our database
+            $rdsInstance->status = 'pending_deletion';
             $rdsInstance->save();
 
-            return response()->json(['message' => 'RDS instance deletion initiated']);
+            return response()->json([
+                'message' => 'RDS instance marked for deletion. Please use AWS console to complete deletion.',
+                'instance' => $rdsInstance
+            ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to delete RDS instance: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to delete RDS instance: ' . $e->getMessage()], 500);
+            \Log::error('Failed to mark RDS instance for deletion: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to mark RDS instance for deletion: ' . $e->getMessage()], 500);
         }
     }
 }
