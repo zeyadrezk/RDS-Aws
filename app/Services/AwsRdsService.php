@@ -5,6 +5,7 @@ namespace App\Services;
 use Aws\Rds\RdsClient;
 use Aws\Exception\AwsException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Config;
 
 class AwsRdsService
 {
@@ -12,14 +13,21 @@ class AwsRdsService
 
     public function __construct()
     {
-        $this->rdsClient = new RdsClient([
+        // Basic configuration with credentials from environment variables
+        $config = [
             'version' => 'latest',
-            'region'  => config('aws.region', 'us-east-1'),
-            'credentials' => [
-                'key'    => config('aws.key'),
-                'secret' => config('aws.secret'),
-            ],
-        ]);
+            'region'  => Config::get('services.aws.region', 'us-east-1'),
+        ];
+
+        // Add credentials if they exist in config
+        if (Config::has('services.aws.key') && Config::has('services.aws.secret')) {
+            $config['credentials'] = [
+                'key'    => Config::get('services.aws.key'),
+                'secret' => Config::get('services.aws.secret'),
+            ];
+        }
+
+        $this->rdsClient = new RdsClient($config);
     }
 
     /**
