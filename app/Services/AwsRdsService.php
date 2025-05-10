@@ -71,11 +71,29 @@ class AwsRdsService
      */
     public function createRdsInstance($instanceIdentifier, $dbName, $username, $password)
     {
+//        return $this->rdsClient->createDBInstance([
+//            'DBInstanceIdentifier' => $instanceIdentifier,
+//            'AllocatedStorage' => 20,
+//            'DBInstanceClass' => 'db.t3.micro',
+//            'Engine' => 'mysql',
+//            'MasterUsername' => $username,
+//            'MasterUserPassword' => $password,
+//            'DBName' => $dbName,
+//            'BackupRetentionPeriod' => 7,
+//            'PubliclyAccessible' => false,
+//            'DBSubnetGroupName' => 'saas-admin-db-subnet-group',
+//            'VpcSecurityGroupIds' => ['sg-09d9a96f0b49fdb8f'],
+//            'StorageEncrypted' => true,
+//            'MultiAZ' => false
+//        ]);
+
+
         return $this->rdsClient->createDBInstance([
             'DBInstanceIdentifier' => $instanceIdentifier,
             'AllocatedStorage' => 20,
             'DBInstanceClass' => 'db.t3.micro',
-            'Engine' => 'postgres', //mysql
+            'Engine' => 'postgres',
+            'EngineVersion' => '15.5', // Specify a supported PostgreSQL version
             'MasterUsername' => $username,
             'MasterUserPassword' => $password,
             'DBName' => $dbName,
@@ -84,8 +102,14 @@ class AwsRdsService
             'DBSubnetGroupName' => 'saas-admin-db-subnet-group',
             'VpcSecurityGroupIds' => ['sg-09d9a96f0b49fdb8f'],
             'StorageEncrypted' => true,
-            'MultiAZ' => false
+            'MultiAZ' => false,
+            'LicenseModel' => 'postgresql-license',
+            'Port' => 5432, // Default PostgreSQL port
+            'StorageType' => 'gp2', // General Purpose SSD
+            'EnablePerformanceInsights' => true, // Enable Performance Insights for monitoring
+            'PerformanceInsightsRetentionPeriod' => 7 // Retention period in days
         ]);
+
     }
 
     /**
