@@ -71,6 +71,7 @@ class AwsRdsService
      */
     public function createRdsInstance($instanceIdentifier, $dbName, $username, $password)
     {
+        //for mysql
 //        return $this->rdsClient->createDBInstance([
 //            'DBInstanceIdentifier' => $instanceIdentifier,
 //            'AllocatedStorage' => 20,
@@ -87,13 +88,36 @@ class AwsRdsService
 //            'MultiAZ' => false
 //        ]);
 
+        try {
+            $engineVersions = $this->rdsClient->describeDBEngineVersions([
+                'Engine' => 'postgres',
+            ]);
+
+            // Get the latest available PostgreSQL version
+            $latestVersion = null;
+            foreach ($engineVersions['DBEngineVersions'] as $version) {
+                $latestVersion = $version['EngineVersion'];
+                // We could implement logic here to find the latest 15.x version
+                // For now, we'll just use the last one returned
+            }
+
+            Log::info("Using PostgreSQL version: {$latestVersion}");
+
+            // If we couldn't find a version, default to a known supported version
+            if (!$latestVersion) {
+                $latestVersion = '15.3'; // Fallback to a commonly supported version
+            }
+        } catch (AwsException $e) {
+            Log::warning("Failed to get PostgreSQL versions: " . $e->getMessage());
+            $latestVersion = '15.3'; // Fallback to a commonly supported version
+        }
 
         return $this->rdsClient->createDBInstance([
             'DBInstanceIdentifier' => $instanceIdentifier,
             'AllocatedStorage' => 20,
             'DBInstanceClass' => 'db.t3.micro',
             'Engine' => 'postgres',
-            'EngineVersion' => '15.4', // Specify a supported PostgreSQL version
+            'EngineVersion' => $latestVersion, // Use the detected version
             'MasterUsername' => $username,
             'MasterUserPassword' => $password,
             'DBName' => $dbName,
@@ -124,4 +148,30 @@ class AwsRdsService
             'DBInstanceIdentifier' => $instanceIdentifier
         ]);
     }
+
+
+    /**
+     * List available PostgreSQL versions supported by AWS RDS.
+     *
+     * @return array
+     */
+    public function listPostgresVersions()
+    {
+        try {
+            $result = $this->rdsClient->describeDBEngineVersions([
+                'Engine' => 'postgres',
+            ]);
+
+            $versions = [];
+            foreach ($result['DBEngineVersions'] as $version) {
+                $versions[] = $version['EngineVersion'];
+            }
+
+            return $versions;
+        } catch (AwsException $e) {
+            Log::error("Failed to list PostgreSQL versions: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
 }
